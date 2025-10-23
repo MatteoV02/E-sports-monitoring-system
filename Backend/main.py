@@ -5,8 +5,8 @@ from typing import List, Optional
 from datetime import datetime, timedelta
 import statistics
 
-from database import get_db, init_db, PlayerDB, MetricDB
-from models import Player, PlayerCreate, Metric, MetricCreate, PlayerMetrics, AnalyticsResponse, TeamStats
+from database.db import get_db, init_db, PlayerDB, MetricDB
+from models.models import Player, PlayerCreate, Metric, MetricCreate, PlayerMetrics, AnalyticsResponse, TeamStats
 
 # Inicializar la aplicación FastAPI
 app = FastAPI(
