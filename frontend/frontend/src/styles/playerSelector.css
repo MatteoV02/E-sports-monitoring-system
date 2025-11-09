@@ -1,0 +1,78 @@
+/**
+ * playerSelector.css
+ * Estilos para el componente PlayerSelector
+ */
+
+.player-selector-container {
+  margin-bottom: var(--spacing-3xl);
+  padding: var(--spacing-xl);
+  background-color: var(--color-bg-secondary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  animation: fadeIn var(--transition-normal);
+}
+
+.player-selector-label {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: 1rem;
+  font-weight: 500;
+  margin-bottom: var(--spacing-md);
+  color: var(--color-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.label-icon {
+  flex-shrink: 0;
+}
+
+.player-selector-select {
+  width: 100%;
+  padding: var(--spacing-md);
+  font-size: 1rem;
+  background-color: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+  border: 2px solid var(--color-border-accent);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.player-selector-select:hover {
+  border-color: #9333ea;
+  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.1);
+}
+
+.player-selector-select:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 4px rgba(168, 85, 247, 0.2);
+}
+
+.player-selector-select option {
+  background-color: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+  padding: var(--spacing-md);
+}
+
+/* Estados de hover para opciones */
+.player-selector-select option:hover {
+  background-color: var(--color-bg-secondary);
+}
+
+/* Media Queries */
+@media (max-width: 768px) {
+  .player-selector-container {
+    padding: var(--spacing-lg);
+  }
+  
+  .player-selector-label {
+    font-size: 0.9rem;
+  }
+  
+  .player-selector-select {
+    font-size: 0.9rem;
+    padding: var(--spacing-sm) var(--spacing-md);
+  }
+}

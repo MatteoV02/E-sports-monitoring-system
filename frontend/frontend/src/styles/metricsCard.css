@@ -1,0 +1,132 @@
+/**
+ * metricsCard.css
+ * Estilos para el componente MetricsCard
+ */
+
+.metrics-card {
+  background-color: var(--color-bg-secondary);
+  padding: var(--spacing-2xl);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  animation: fadeIn var(--transition-normal);
+  transition: all var(--transition-fast);
+  position: relative;
+  overflow: hidden;
+}
+
+.metrics-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background: linear-gradient(180deg, var(--color-primary) 0%, var(--color-secondary) 100%);
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.metrics-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--color-border-accent);
+}
+
+.metrics-card:hover::before {
+  opacity: 1;
+}
+
+.metrics-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+}
+
+.metrics-icon {
+  flex-shrink: 0;
+  animation: pulse 2s infinite;
+}
+
+.metrics-title {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 600;
+}
+
+.metrics-value {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin-bottom: var(--spacing-sm);
+  color: var(--color-text-primary);
+  line-height: 1;
+}
+
+.metrics-trend {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.trend-positive {
+  color: var(--color-success);
+}
+
+.trend-negative {
+  color: var(--color-danger);
+}
+
+.trend-icon {
+  flex-shrink: 0;
+}
+
+.trend-value {
+  font-weight: 700;
+}
+
+.trend-label {
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+  margin-left: var(--spacing-xs);
+}
+
+/* Animación de entrada */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.metrics-card {
+  animation: slideIn 0.4s ease-out;
+}
+
+/* Media Queries */
+@media (max-width: 768px) {
+  .metrics-card {
+    padding: var(--spacing-lg);
+  }
+  
+  .metrics-value {
+    font-size: 2rem;
+  }
+  
+  .metrics-header {
+    gap: var(--spacing-sm);
+  }
+  
+  .metrics-icon {
+    width: 20px;
+    height: 20px;
+  }
+}

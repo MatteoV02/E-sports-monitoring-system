@@ -1,0 +1,158 @@
+/**
+ * playerCard.css
+ * Estilos para el componente PlayerCard
+ */
+
+.player-card {
+  background-color: var(--color-bg-secondary);
+  padding: var(--spacing-2xl);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  animation: fadeIn var(--transition-normal);
+  transition: transform var(--transition-fast);
+}
+
+.player-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+.player-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-xl);
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
+}
+
+.player-name {
+  font-size: 1.8rem;
+  margin: 0;
+  color: var(--color-primary);
+  font-weight: 700;
+}
+
+.status-badge {
+  padding: 6px 16px;
+  border-radius: var(--radius-full);
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  animation: pulse 2s infinite;
+}
+
+.status-normal {
+  background-color: var(--color-success);
+  color: var(--color-bg-primary);
+}
+
+.status-fatigue {
+  background-color: var(--color-warning);
+  color: var(--color-bg-primary);
+}
+
+.status-risk {
+  background-color: var(--color-danger);
+  color: var(--color-text-primary);
+}
+
+.player-info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-xl);
+}
+
+.info-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.info-label {
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+.info-value {
+  font-size: 1.1rem;
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+.last-reading-section {
+  margin-top: var(--spacing-xl);
+  padding: var(--spacing-lg);
+  background-color: var(--color-bg-tertiary);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-accent);
+}
+
+.last-reading-title {
+  margin: 0 0 var(--spacing-md) 0;
+  font-size: 0.9rem;
+  color: var(--color-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+.reading-values {
+  display: flex;
+  gap: var(--spacing-2xl);
+  flex-wrap: wrap;
+}
+
+.reading-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+.reading-icon {
+  flex-shrink: 0;
+}
+
+.reading-icon.heart-rate {
+  color: var(--color-primary);
+}
+
+.reading-icon.oxygen {
+  color: var(--color-secondary);
+}
+
+.reading-value {
+  color: var(--color-text-primary);
+}
+
+/* Media Queries */
+@media (max-width: 768px) {
+  .player-card {
+    padding: var(--spacing-lg);
+  }
+  
+  .player-name {
+    font-size: 1.4rem;
+  }
+  
+  .player-info-grid {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-md);
+  }
+  
+  .reading-values {
+    flex-direction: column;
+    gap: var(--spacing-md);
+  }
+  
+  .reading-item {
+    font-size: 1rem;
+  }
+}

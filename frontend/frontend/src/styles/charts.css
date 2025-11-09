@@ -1,0 +1,130 @@
+/**
+ * charts.css
+ * Estilos para los componentes de gráficas
+ */
+
+.chart-container {
+  background-color: var(--color-bg-secondary);
+  padding: var(--spacing-2xl);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  animation: fadeIn var(--transition-normal);
+  transition: all var(--transition-fast);
+}
+
+.chart-container:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--color-border-accent);
+}
+
+.chart-title {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-xl);
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.chart-icon {
+  flex-shrink: 0;
+}
+
+.heart-rate-icon {
+  color: var(--color-primary);
+}
+
+.oxygen-icon {
+  color: var(--color-secondary);
+}
+
+/* Tooltip personalizado */
+.custom-tooltip {
+  background-color: var(--color-bg-tertiary);
+  border: 2px solid var(--color-border-accent);
+  border-radius: var(--radius-sm);
+  padding: var(--spacing-md);
+  box-shadow: var(--shadow-md);
+}
+
+.tooltip-time {
+  margin: 0 0 var(--spacing-xs) 0;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+  font-weight: 600;
+}
+
+.tooltip-value {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  display: flex;
+  align-items: center;
+}
+
+/* Animación de entrada para las gráficas */
+@keyframes chartFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.chart-container {
+  animation: chartFadeIn 0.5s ease-out;
+}
+
+/* Estilos para elementos SVG de Recharts */
+.recharts-wrapper {
+  cursor: crosshair;
+}
+
+.recharts-cartesian-axis-tick-value {
+  fill: var(--color-text-secondary);
+}
+
+.recharts-cartesian-grid-horizontal line,
+.recharts-cartesian-grid-vertical line {
+  stroke: var(--color-border);
+}
+
+/* Media Queries */
+@media (max-width: 768px) {
+  .chart-container {
+    padding: var(--spacing-lg);
+  }
+  
+  .chart-title {
+    font-size: 1rem;
+    margin-bottom: var(--spacing-lg);
+  }
+  
+  .chart-icon {
+    width: 18px;
+    height: 18px;
+  }
+  
+  .custom-tooltip {
+    padding: var(--spacing-sm);
+  }
+  
+  .tooltip-time {
+    font-size: 0.75rem;
+  }
+  
+  .tooltip-value {
+    font-size: 0.9rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .chart-container {
+    padding: var(--spacing-md);
+  }
+}
