@@ -1,10 +1,5 @@
-/**
- * Dashboard.jsx
- * Página principal del dashboard de monitoreo
- * Integra todos los componentes y maneja el estado global
- */
-
-import React, { useState, useMemo } from 'react';
+// src/pages/Dashboard.jsx
+import React, { useState, useEffect, useMemo } from 'react';
 import { Activity, Droplets } from 'lucide-react';
 
 // Componentes
@@ -15,84 +10,119 @@ import ChartHeartRate from '../components/ChartHeartRate';
 import ChartOxygen from '../components/ChartOxygen';
 import ForecastCard from '../components/ForecastCard';
 
-// Data y utilidades
-import { MOCK_PLAYERS } from '../data/mockPlayers';
-import { calculateAnalytics } from '../utils/analytics';
+// API
+import {
+  getPlayers,
+  getPlayerAnalytics
+} from '../services/api';
 
 // Estilos
 import '../styles/dashboard.css';
 
 const Dashboard = () => {
+  const [players, setPlayers] = useState([]);
   const [selectedPlayer, setSelectedPlayer] = useState(null);
+  const [analytics, setAnalytics] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  // Calcular analytics cuando cambia el jugador seleccionado
-  const analytics = useMemo(() => {
-    if (!selectedPlayer) return null;
-    return calculateAnalytics(selectedPlayer.metrics);
+  // Cargar jugadores al inicio
+  useEffect(() => {
+    getPlayers()
+      .then(data => setPlayers(data))
+      .catch(err => console.error("Error cargando jugadores:", err));
+  }, []);
+
+  // Cargar analytics cuando se selecciona un jugador
+  useEffect(() => {
+    if (!selectedPlayer) return;
+
+    setLoading(true);
+    setError(null);
+
+    getPlayerAnalytics(selectedPlayer.id)
+      .then(data => setAnalytics(data))
+      .catch(err => {
+        console.error("Error al obtener analytics:", err);
+        setError("No se pudieron cargar las métricas del jugador.");
+        setAnalytics(null);
+      })
+      .finally(() => setLoading(false));
   }, [selectedPlayer]);
 
   return (
     <div className="dashboard">
-      {/* Header */}
       <header className="dashboard-header">
         <h1 className="dashboard-title">⚡ E-Sports Health Monitoring</h1>
-        <p className="dashboard-subtitle">Sistema de Análisis Biométrico en Tiempo Real</p>
+        <p className="dashboard-subtitle">
+          Sistema de análisis biométrico en tiempo real
+        </p>
       </header>
 
-      {/* Selector de Jugador */}
-      <PlayerSelector 
-        players={MOCK_PLAYERS}
+      {/* Selector de jugador */}
+      <PlayerSelector
+        players={players}
         selectedPlayer={selectedPlayer}
         onSelectPlayer={setSelectedPlayer}
       />
 
-      {/* Contenido del Dashboard */}
-      {selectedPlayer && analytics ? (
+      {loading && (
+        <div className="loading-state">
+          <Activity size={48} />
+          <p>Cargando métricas...</p>
+        </div>
+      )}
+
+      {error && (
+        <div className="error-state">
+          <p>{error}</p>
+        </div>
+      )}
+
+      {selectedPlayer && analytics && !loading && !error && (
         <>
-          {/* Sección superior: Info del jugador y métricas */}
+          {/* Sección superior: info jugador y métricas */}
           <div className="top-section">
-            <PlayerCard 
+            <PlayerCard
               player={selectedPlayer}
-              lastReading={selectedPlayer.metrics[selectedPlayer.metrics.length - 1]}
-              status={analytics.status}
+              lastReading={analytics.last_reading || {}}
+              status={analytics.status || 'normal'}
             />
-            
+
             <div className="metrics-grid">
-              <MetricsCard 
+              <MetricsCard
                 title="HR Promedio"
-                value={`${analytics.avgHR} BPM`}
+                value={`${analytics.avg_heart_rate} BPM`}
                 icon={Activity}
                 color="#a855f7"
               />
-              <MetricsCard 
+              <MetricsCard
                 title="SpO₂ Promedio"
-                value={`${analytics.avgO2}%`}
+                value={`${analytics.avg_oxygen_saturation}%`}
                 icon={Droplets}
                 color="#3b82f6"
               />
             </div>
           </div>
 
-          {/* Sección de gráficas */}
+          {/* Gráficas */}
           <div className="charts-section">
-            <ChartHeartRate data={selectedPlayer.metrics} />
-            <ChartOxygen data={selectedPlayer.metrics} />
+            <ChartHeartRate data={selectedPlayer.metrics || []} />
+            <ChartOxygen data={selectedPlayer.metrics || []} />
           </div>
 
-          {/* Sección de pronóstico */}
-          <ForecastCard 
-            forecast={analytics.forecast}
-            anomalies={analytics.anomalies}
+          {/* Pronóstico y anomalías */}
+          <ForecastCard
+            forecast={analytics.forecast || []}
+            anomalies={analytics.anomalies || []}
           />
         </>
-      ) : (
-        /* Estado vacío */
+      )}
+
+      {!selectedPlayer && !loading && (
         <div className="empty-state">
           <Activity size={64} className="empty-icon" />
           <h2 className="empty-title">Selecciona un jugador para ver sus métricas</h2>
-          <p className="empty-description">
-            Elige un jugador del menú desplegable para comenzar a analizar sus datos biométricos
-          </p>
         </div>
       )}
     </div>

@@ -1,12 +1,8 @@
-/**
- * App.jsx
- * Componente raíz de la aplicación
- * Aquí se pueden agregar rutas con React Router en el futuro
- */
-
-import React from 'react';
-import Dashboard from './pages/Dashboard';
-import './styles/global.css';
+// src/App.jsx
+import React from "react";
+import { useEffect } from 'react';
+import Dashboard from "./pages/Dashboard";
+import "./styles/global.css"; // Si tienes estilos globales
 
 function App() {
   return (
@@ -14,6 +10,17 @@ function App() {
       <Dashboard />
     </div>
   );
+
+
+
+useEffect(() => {
+  fetch('/api/health')
+    .then(res => res.json())
+    .then(data => console.log('Backend conectado:', data))
+    .catch(err => console.error('Error backend:', err));
+}, []);
+
 }
+
 
 export default App;
