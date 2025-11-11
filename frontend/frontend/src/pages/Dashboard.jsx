@@ -1,5 +1,5 @@
 // src/pages/Dashboard.jsx
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Activity, Droplets } from 'lucide-react';
 
 // Componentes
@@ -11,10 +11,7 @@ import ChartOxygen from '../components/ChartOxygen';
 import ForecastCard from '../components/ForecastCard';
 
 // API
-import {
-  getPlayers,
-  getPlayerAnalytics
-} from '../services/api';
+import { getPlayers, getPlayerAnalytics } from '../services/api';
 
 // Estilos
 import '../styles/dashboard.css';
@@ -23,80 +20,85 @@ const Dashboard = () => {
   const [players, setPlayers] = useState([]);
   const [selectedPlayer, setSelectedPlayer] = useState(null);
   const [analytics, setAnalytics] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loadingPlayers, setLoadingPlayers] = useState(true);
+  const [loadingAnalytics, setLoadingAnalytics] = useState(false);
   const [error, setError] = useState(null);
 
-  // Cargar jugadores al inicio
+  // Cargar jugadores desde el backend
   useEffect(() => {
+    setLoadingPlayers(true);
     getPlayers()
-      .then(data => setPlayers(data))
-      .catch(err => console.error("Error cargando jugadores:", err));
+      .then(data => {
+        setPlayers(data);
+        setLoadingPlayers(false);
+      })
+      .catch(err => {
+        console.error("Error cargando jugadores:", err);
+        setError("No se pudieron cargar los jugadores");
+        setLoadingPlayers(false);
+      });
   }, []);
 
-  // Cargar analytics cuando se selecciona un jugador
+  // Cargar analytics cuando cambie el jugador seleccionado
   useEffect(() => {
-    if (!selectedPlayer) return;
+    if (!selectedPlayer) {
+      setAnalytics(null);
+      return;
+    }
 
-    setLoading(true);
-    setError(null);
-
+    setLoadingAnalytics(true);
     getPlayerAnalytics(selectedPlayer.id)
-      .then(data => setAnalytics(data))
+      .then(data => {
+        setAnalytics(data);
+        setLoadingAnalytics(false);
+      })
       .catch(err => {
         console.error("Error al obtener analytics:", err);
-        setError("No se pudieron cargar las métricas del jugador.");
-        setAnalytics(null);
-      })
-      .finally(() => setLoading(false));
+        setError("No se pudo obtener analytics del jugador");
+        setLoadingAnalytics(false);
+      });
   }, [selectedPlayer]);
 
   return (
     <div className="dashboard">
+      {/* Header */}
       <header className="dashboard-header">
         <h1 className="dashboard-title">⚡ E-Sports Health Monitoring</h1>
-        <p className="dashboard-subtitle">
-          Sistema de análisis biométrico en tiempo real
-        </p>
+        <p className="dashboard-subtitle">Sistema de Análisis Biométrico en Tiempo Real</p>
       </header>
 
-      {/* Selector de jugador */}
-      <PlayerSelector
-        players={players}
-        selectedPlayer={selectedPlayer}
-        onSelectPlayer={setSelectedPlayer}
-      />
-
-      {loading && (
-        <div className="loading-state">
-          <Activity size={48} />
-          <p>Cargando métricas...</p>
-        </div>
+      {/* Selector de Jugador */}
+      {loadingPlayers ? (
+        <p>Cargando jugadores...</p>
+      ) : error ? (
+        <p className="error">{error}</p>
+      ) : (
+        <PlayerSelector
+          players={players}
+          selectedPlayer={selectedPlayer}
+          onSelectPlayer={setSelectedPlayer}
+        />
       )}
 
-      {error && (
-        <div className="error-state">
-          <p>{error}</p>
-        </div>
-      )}
-
-      {selectedPlayer && analytics && !loading && !error && (
+      {/* Contenido del Dashboard */}
+      {selectedPlayer && analytics ? (
         <>
-          {/* Sección superior: info jugador y métricas */}
+          {/* Sección superior: Info del jugador y métricas */}
           <div className="top-section">
-            <PlayerCard
+            <PlayerCard 
               player={selectedPlayer}
-              lastReading={analytics.last_reading || {}}
-              status={analytics.status || 'normal'}
+              lastReading={analytics.last_reading}
+              status={analytics.status}
             />
 
             <div className="metrics-grid">
-              <MetricsCard
+              <MetricsCard 
                 title="HR Promedio"
                 value={`${analytics.avg_heart_rate} BPM`}
                 icon={Activity}
                 color="#a855f7"
               />
-              <MetricsCard
+              <MetricsCard 
                 title="SpO₂ Promedio"
                 value={`${analytics.avg_oxygen_saturation}%`}
                 icon={Droplets}
@@ -105,24 +107,27 @@ const Dashboard = () => {
             </div>
           </div>
 
-          {/* Gráficas */}
+          {/* Sección de gráficas */}
           <div className="charts-section">
-            <ChartHeartRate data={selectedPlayer.metrics || []} />
-            <ChartOxygen data={selectedPlayer.metrics || []} />
+            <ChartHeartRate data={analytics.metrics} />
+            <ChartOxygen data={analytics.metrics} />
           </div>
 
-          {/* Pronóstico y anomalías */}
-          <ForecastCard
-            forecast={analytics.forecast || []}
-            anomalies={analytics.anomalies || []}
+          {/* Sección de pronóstico */}
+          <ForecastCard 
+            forecast={analytics.forecast}
+            anomalies={analytics.anomalies}
           />
         </>
-      )}
-
-      {!selectedPlayer && !loading && (
+      ) : selectedPlayer && loadingAnalytics ? (
+        <p>Cargando métricas del jugador...</p>
+      ) : (
         <div className="empty-state">
           <Activity size={64} className="empty-icon" />
           <h2 className="empty-title">Selecciona un jugador para ver sus métricas</h2>
+          <p className="empty-description">
+            Elige un jugador del menú desplegable para comenzar a analizar sus datos biométricos
+          </p>
         </div>
       )}
     </div>
