@@ -223,7 +223,7 @@ def get_player_summary(player_id: int, db: Session = Depends(get_db)):
         last_reading=last_reading
     )
 
-# Endpoints de Equipos y Estadísticas Globales
+# Endpoints de Equipos y Estadísticas Globales.
 @app.get("/teams/{team_name}/stats", response_model=TeamStats)
 def get_team_stats(team_name: str, db: Session = Depends(get_db)):
     """Obtener estadísticas de un equipo completo"""
