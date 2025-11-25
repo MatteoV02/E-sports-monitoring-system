@@ -4,21 +4,52 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime, timedelta
 import statistics
+import boto3
+import pandas as pd
+import time
+import os
+from dotenv import load_dotenv
 
 from database.db import get_db, init_db, PlayerDB, MetricDB
 from models.models import Player, PlayerCreate, Metric, MetricCreate, PlayerMetrics, AnalyticsResponse, TeamStats
+
+# Cargar variables de entorno
+load_dotenv()
+
+# Configuración AWS
+AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
+S3_OUTPUT_BUCKET = os.getenv("S3_OUTPUT_BUCKET", "bucket-datoso")
+ATHENA_DATABASE = os.getenv("ATHENA_DATABASE", "healthcare-db")
+ATHENA_TABLE = os.getenv("ATHENA_TABLE", "transformed_destination")
+ATHENA_OUTPUT_LOCATION = f"s3://{S3_OUTPUT_BUCKET}/athena-results/"
+
+# Clientes AWS
+athena_client = None
+s3_client = None
+
+# Verificar si AWS está configurado
+AWS_ENABLED = False
+try:
+    if os.getenv("AWS_ACCESS_KEY_ID"):
+        athena_client = boto3.client('athena', region_name=AWS_REGION)
+        s3_client = boto3.client('s3', region_name=AWS_REGION)
+        AWS_ENABLED = True
+        print("✓ AWS Athena habilitado")
+except Exception as e:
+    print(f"⚠ AWS no configurado: {e}")
+    print("La API funcionará solo con base de datos local")
 
 # Inicializar la aplicación FastAPI
 app = FastAPI(
     title="E-Sports Health Monitoring API",
     description="API para monitoreo de métricas biométricas de jugadores profesionales",
-    version="1.0.0"
+    version="2.0.0"
 )
 
-# Configurar CORS para permitir requests del frontend
+# Configurar CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],  # React dev server
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -28,306 +59,501 @@ app.add_middleware(
 @app.on_event("startup")
 def startup_event():
     init_db()
+    print(f"API iniciada - AWS Athena: {'Habilitado' if AWS_ENABLED else 'Deshabilitado'}")
 
-# Endpoints de Jugadores
-@app.get("/players", response_model=List[Player])
-def get_players(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    """Obtener lista de todos los jugadores"""
-    players = db.query(PlayerDB).offset(skip).limit(limit).all()
-    return players
+# ============================================================================
+# FUNCIONES AUXILIARES PARA ATHENA
+# ============================================================================
 
-@app.get("/players/{player_id}", response_model=Player)
-def get_player(player_id: int, db: Session = Depends(get_db)):
-    """Obtener información de un jugador específico"""
-    player = db.query(PlayerDB).filter(PlayerDB.id == player_id).first()
-    if not player:
-        raise HTTPException(status_code=404, detail="Jugador no encontrado")
-    return player
-
-@app.post("/players", response_model=Player)
-def create_player(player: PlayerCreate, db: Session = Depends(get_db)):
-    """Crear un nuevo jugador"""
-    db_player = PlayerDB(**player.dict())
-    db.add(db_player)
-    db.commit()
-    db.refresh(db_player)
-    return db_player
-
-# Endpoints de Métricas
-@app.post("/metrics", response_model=Metric)
-def create_metric(metric: MetricCreate, db: Session = Depends(get_db)):
-    """Registrar nuevas métricas para un jugador"""
-    # Verificar que el jugador existe
-    player = db.query(PlayerDB).filter(PlayerDB.id == metric.player_id).first()
-    if not player:
-        raise HTTPException(status_code=404, detail="Jugador no encontrado")
+def execute_athena_query(query: str) -> pd.DataFrame:
+    """Ejecuta una query en Athena y retorna los resultados como DataFrame"""
+    if not AWS_ENABLED:
+        raise HTTPException(status_code=503, detail="AWS Athena no está configurado")
     
-    db_metric = MetricDB(**metric.dict())
-    db.add(db_metric)
-    db.commit()
-    db.refresh(db_metric)
-    return db_metric
-
-@app.get("/players/{player_id}/metrics", response_model=List[Metric])
-def get_player_metrics(
-    player_id: int,
-    hours: int = Query(24, description="Horas hacia atrás para obtener métricas"),
-    db: Session = Depends(get_db)
-):
-    """Obtener métricas de un jugador en un período específico"""
-    # Verificar que el jugador existe
-    player = db.query(PlayerDB).filter(PlayerDB.id == player_id).first()
-    if not player:
-        raise HTTPException(status_code=404, detail="Jugador no encontrado")
-    
-    start_time = datetime.utcnow() - timedelta(hours=hours)
-    
-    metrics = db.query(MetricDB).filter(
-        MetricDB.player_id == player_id,
-        MetricDB.timestamp >= start_time
-    ).order_by(MetricDB.timestamp.desc()).all()
-    
-    return metrics
-
-@app.get("/players/{player_id}/metrics/latest", response_model=Metric)
-def get_latest_metric(player_id: int, db: Session = Depends(get_db)):
-    """Obtener la última métrica registrada de un jugador"""
-    metric = db.query(MetricDB).filter(
-        MetricDB.player_id == player_id
-    ).order_by(MetricDB.timestamp.desc()).first()
-    
-    if not metric:
-        raise HTTPException(status_code=404, detail="No se encontraron métricas para este jugador")
-    
-    return metric
-
-# Endpoints de Analytics
-@app.get("/players/{player_id}/analytics", response_model=AnalyticsResponse)
-def get_player_analytics(
-    player_id: int,
-    hours: int = Query(8, description="Período de análisis en horas"),
-    db: Session = Depends(get_db)
-):
-    """Obtener análisis completo de las métricas de un jugador"""
-    # Verificar que el jugador existe
-    player = db.query(PlayerDB).filter(PlayerDB.id == player_id).first()
-    if not player:
-        raise HTTPException(status_code=404, detail="Jugador no encontrado")
-    
-    start_time = datetime.utcnow() - timedelta(hours=hours)
-    
-    metrics = db.query(MetricDB).filter(
-        MetricDB.player_id == player_id,
-        MetricDB.timestamp >= start_time
-    ).all()
-    
-    if not metrics:
-        raise HTTPException(status_code=404, detail="No hay métricas en el período especificado")
-    
-    # Cálculos estadísticos
-    heart_rates = [m.heart_rate for m in metrics]
-    oxygen_levels = [m.oxygen_saturation for m in metrics]
-    
-    avg_heart_rate = sum(heart_rates) / len(heart_rates)
-    avg_oxygen = sum(oxygen_levels) / len(oxygen_levels)
-    
-    max_heart_rate = max(heart_rates)
-    min_heart_rate = min(heart_rates)
-    max_oxygen = max(oxygen_levels)
-    min_oxygen = min(oxygen_levels)
-    
-    # Calcular HRV (Variabilidad del Ritmo Cardíaco)
-    if len(heart_rates) > 1:
-        hrv = statistics.stdev(heart_rates)
-    else:
-        hrv = 0
-    
-    # Determinar estado del jugador
-    status = "normal"
-    anomalies = []
-    
-    if max_heart_rate > 110 or min_oxygen < 95:
-        status = "fatigue"
-    if max_heart_rate > 120 or min_oxygen < 94:
-        status = "risk"
-    
-    # Detectar anomalías
-    if max_heart_rate > 110:
-        anomalies.append(f"Pico de ritmo cardíaco elevado: {max_heart_rate} BPM")
-    if min_oxygen < 95:
-        anomalies.append(f"Oxigenación baja detectada: {min_oxygen}%")
-    
-    # Detectar cambios bruscos en HR
-    for i in range(1, len(heart_rates)):
-        change = abs(heart_rates[i] - heart_rates[i-1])
-        if change > 20:
-            anomalies.append(f"Cambio brusco en HR: {change} BPM")
-            break
-    
-    # Calcular tendencias (últimas 4 lecturas vs primeras 4)
-    recent_hr = heart_rates[-4:] if len(heart_rates) >= 4 else heart_rates
-    recent_o2 = oxygen_levels[-4:] if len(oxygen_levels) >= 4 else oxygen_levels
-    older_hr = heart_rates[:4] if len(heart_rates) >= 4 else heart_rates
-    older_o2 = oxygen_levels[:4] if len(oxygen_levels) >= 4 else oxygen_levels
-    
-    trend_hr = (sum(recent_hr)/len(recent_hr) - sum(older_hr)/len(older_hr)) if older_hr else 0
-    trend_o2 = (sum(recent_o2)/len(recent_o2) - sum(older_o2)/len(older_o2)) if older_o2 else 0
-    
-    return AnalyticsResponse(
-        player_id=player_id,
-        period=f"{hours}h",
-        avg_heart_rate=round(avg_heart_rate, 1),
-        avg_oxygen_saturation=round(avg_oxygen, 1),
-        max_heart_rate=max_heart_rate,
-        min_heart_rate=min_heart_rate,
-        max_oxygen=max_oxygen,
-        min_oxygen=min_oxygen,
-        hrv=round(hrv, 1),
-        status=status,
-        anomalies=anomalies,
-        trend_heart_rate=round(trend_hr, 1),
-        trend_oxygen=round(trend_o2, 1)
-    )
-
-@app.get("/players/{player_id}/summary", response_model=PlayerMetrics)
-def get_player_summary(player_id: int, db: Session = Depends(get_db)):
-    """Obtener resumen completo del jugador con sus métricas"""
-    player = db.query(PlayerDB).filter(PlayerDB.id == player_id).first()
-    if not player:
-        raise HTTPException(status_code=404, detail="Jugador no encontrado")
-    
-    # Obtener métricas de las últimas 8 horas
-    start_time = datetime.utcnow() - timedelta(hours=8)
-    metrics = db.query(MetricDB).filter(
-        MetricDB.player_id == player_id,
-        MetricDB.timestamp >= start_time
-    ).order_by(MetricDB.timestamp.asc()).all()
-    
-    if metrics:
-        heart_rates = [m.heart_rate for m in metrics]
-        oxygen_levels = [m.oxygen_saturation for m in metrics]
+    try:
+        # Iniciar ejecución de query
+        response = athena_client.start_query_execution(
+            QueryString=query,
+            QueryExecutionContext={'Database': ATHENA_DATABASE},
+            ResultConfiguration={'OutputLocation': ATHENA_OUTPUT_LOCATION}
+        )
         
-        avg_heart_rate = sum(heart_rates) / len(heart_rates)
-        avg_oxygen_saturation = sum(oxygen_levels) / len(oxygen_levels)
-        last_reading = metrics[-1]
-    else:
-        avg_heart_rate = 0
-        avg_oxygen_saturation = 0
-        last_reading = None
+        query_execution_id = response['QueryExecutionId']
+        
+        # Esperar a que la query termine
+        max_attempts = 30
+        attempt = 0
+        while attempt < max_attempts:
+            query_status = athena_client.get_query_execution(
+                QueryExecutionId=query_execution_id
+            )
+            status = query_status['QueryExecution']['Status']['State']
+            
+            if status == 'SUCCEEDED':
+                break
+            elif status in ['FAILED', 'CANCELLED']:
+                reason = query_status['QueryExecution']['Status'].get('StateChangeReason', 'Unknown')
+                raise Exception(f"Query failed: {reason}")
+            
+            time.sleep(2)
+            attempt += 1
+        
+        if attempt >= max_attempts:
+            raise Exception("Query timeout")
+        
+        # Obtener resultados
+        result = athena_client.get_query_results(QueryExecutionId=query_execution_id)
+        
+        # Convertir a DataFrame
+        columns = [col['Label'] for col in result['ResultSet']['ResultSetMetadata']['ColumnInfo']]
+        rows = []
+        
+        for row in result['ResultSet']['Rows'][1:]:  # Skip header
+            rows.append([field.get('VarCharValue', None) for field in row['Data']])
+        
+        df = pd.DataFrame(rows, columns=columns)
+        return df
     
-    return PlayerMetrics(
-        player=player,
-        metrics=metrics,
-        avg_heart_rate=round(avg_heart_rate, 1),
-        avg_oxygen_saturation=round(avg_oxygen_saturation, 1),
-        last_reading=last_reading
-    )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error ejecutando query en Athena: {str(e)}")
 
-# Endpoints de Equipos y Estadísticas Globales.
-@app.get("/teams/{team_name}/stats", response_model=TeamStats)
-def get_team_stats(team_name: str, db: Session = Depends(get_db)):
-    """Obtener estadísticas de un equipo completo"""
-    players = db.query(PlayerDB).filter(PlayerDB.team == team_name).all()
-    
-    if not players:
-        raise HTTPException(status_code=404, detail="Equipo no encontrado")
-    
-    team_heart_rates = []
-    team_oxygen_levels = []
-    players_status = {}
-    
-    for player in players:
-        # Obtener métricas recientes de cada jugador
-        start_time = datetime.utcnow() - timedelta(hours=4)
-        metrics = db.query(MetricDB).filter(
-            MetricDB.player_id == player.id,
-            MetricDB.timestamp >= start_time
-        ).all()
-        
-        if metrics:
-            heart_rates = [m.heart_rate for m in metrics]
-            oxygen_levels = [m.oxygen_saturation for m in metrics]
-            
-            avg_hr = sum(heart_rates) / len(heart_rates)
-            avg_o2 = sum(oxygen_levels) / len(oxygen_levels)
-            
-            team_heart_rates.append(avg_hr)
-            team_oxygen_levels.append(avg_o2)
-            
-            # Determinar estado individual
-            max_hr = max(heart_rates)
-            min_o2 = min(oxygen_levels)
-            
-            status = "normal"
-            if max_hr > 110 or min_o2 < 95:
-                status = "fatigue"
-            if max_hr > 120 or min_o2 < 94:
-                status = "risk"
-                
-            players_status[player.name] = status
-    
-    avg_team_hr = sum(team_heart_rates) / len(team_heart_rates) if team_heart_rates else 0
-    avg_team_o2 = sum(team_oxygen_levels) / len(team_oxygen_levels) if team_oxygen_levels else 0
-    
-    return TeamStats(
-        team=team_name,
-        total_players=len(players),
-        avg_team_heart_rate=round(avg_team_hr, 1),
-        avg_team_oxygen=round(avg_team_o2, 1),
-        players_status=players_status
-    )
+# ============================================================================
+# ENDPOINTS ORIGINALES (Base de datos local SQLite) - COMENTADOS
+# ============================================================================
 
-@app.get("/dashboard/overview")
-def get_dashboard_overview(db: Session = Depends(get_db)):
-    """Vista general del dashboard con estadísticas globales"""
-    total_players = db.query(PlayerDB).count()
-    teams = db.query(PlayerDB.team).distinct().all()
-    total_teams = len(teams)
-    
-    # Obtener todas las métricas recientes (últimas 4 horas)
-    start_time = datetime.utcnow() - timedelta(hours=4)
-    recent_metrics = db.query(MetricDB).filter(MetricDB.timestamp >= start_time).all()
-    
-    if recent_metrics:
-        heart_rates = [m.heart_rate for m in recent_metrics]
-        oxygen_levels = [m.oxygen_saturation for m in recent_metrics]
-        
-        global_avg_hr = sum(heart_rates) / len(heart_rates)
-        global_avg_o2 = sum(oxygen_levels) / len(oxygen_levels)
-        
-        # Jugadores en riesgo
-        players_at_risk = 0
-        players = db.query(PlayerDB).all()
-        for player in players:
-            player_metrics = db.query(MetricDB).filter(
-                MetricDB.player_id == player.id,
-                MetricDB.timestamp >= start_time
-            ).all()
-            
-            if player_metrics:
-                player_hr = [m.heart_rate for m in player_metrics]
-                player_o2 = [m.oxygen_saturation for m in player_metrics]
-                
-                if max(player_hr) > 120 or min(player_o2) < 94:
-                    players_at_risk += 1
-    else:
-        global_avg_hr = 0
-        global_avg_o2 = 0
-        players_at_risk = 0
-    
+# Todos los endpoints de SQLite están comentados para usar solo AWS
+
+# ============================================================================
+# ENDPOINTS PARA AWS GLUE/ATHENA
+# ============================================================================
+
+@app.get("/")
+def root():
+    """Información de la API"""
     return {
-        "total_players": total_players,
-        "total_teams": total_teams,
-        "global_avg_heart_rate": round(global_avg_hr, 1),
-        "global_avg_oxygen": round(global_avg_o2, 1),
-        "players_at_risk": players_at_risk,
-        "last_updated": datetime.utcnow()
+        "message": "E-Sports Health Monitoring API",
+        "version": "2.0.0",
+        "aws_enabled": AWS_ENABLED,
+        "endpoints": {
+            "aws_status": "/aws/status",
+            "aws_records": "/aws/records",
+            "aws_stats": "/aws/stats",
+            "aws_high_risk": "/aws/high-risk",
+            "aws_analytics_overall": "/aws/analytics/overall",
+            "aws_analytics_trends": "/aws/analytics/trends",
+            "aws_records_latest": "/aws/records/latest",
+            "aws_records_by_category": "/aws/records/by-category",
+            "aws_records_hourly_stats": "/aws/records/hourly-stats",
+            "aws_records_recent_hours": "/aws/records/recent-hours",
+            "aws_date_range": "/aws/date-range",
+            "aws_daily_summary": "/aws/daily-summary"
+        }
     }
 
-# Health check
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "timestamp": datetime.utcnow()}
+    """Health check endpoint"""
+    return {
+        "status": "healthy",
+        "timestamp": datetime.utcnow(),
+        "aws_enabled": AWS_ENABLED
+    }
+
+@app.get("/aws/status")
+def aws_status():
+    """Verificar si AWS Athena está disponible"""
+    return {
+        "aws_enabled": AWS_ENABLED,
+        "region": AWS_REGION if AWS_ENABLED else None,
+        "database": ATHENA_DATABASE if AWS_ENABLED else None,
+        "table": ATHENA_TABLE if AWS_ENABLED else None
+    }
+
+@app.get("/aws/records")
+def get_aws_records(limit: int = Query(default=100, le=1000)):
+    """Obtener registros desde AWS Athena (sin OFFSET)"""
+    if not AWS_ENABLED:
+        raise HTTPException(status_code=503, detail="AWS Athena no está configurado")
+    
+    query = f"""
+    SELECT 
+        timestamp_parsed as timestamp,
+        heart_rate_avg,
+        oxygen_saturation_avg,
+        heart_rate_category,
+        oxygen_category,
+        date,
+        hour,
+        year,
+        month,
+        day
+    FROM "{ATHENA_DATABASE}"."{ATHENA_TABLE}"
+    ORDER BY timestamp_parsed DESC
+    LIMIT {limit}
+    """
+    
+    df = execute_athena_query(query)
+    
+    if df.empty:
+        return []
+    
+    return df.to_dict('records')
+
+@app.get("/aws/stats")
+def get_aws_statistics():
+    """Obtener estadísticas desde datos procesados en AWS"""
+    if not AWS_ENABLED:
+        raise HTTPException(status_code=503, detail="AWS Athena no está configurado")
+    
+    query = f"""
+    SELECT 
+        AVG(CAST(heart_rate_avg AS DOUBLE)) as avg_heart_rate,
+        AVG(CAST(oxygen_saturation_avg AS DOUBLE)) as avg_oxygen,
+        COUNT(*) as total_records,
+        SUM(CASE WHEN heart_rate_category = 'High' THEN 1 ELSE 0 END) as high_heart_rate_count,
+        SUM(CASE WHEN heart_rate_category = 'Low' THEN 1 ELSE 0 END) as low_heart_rate_count,
+        SUM(CASE WHEN oxygen_category IN ('Concerning', 'Critical') THEN 1 ELSE 0 END) as low_oxygen_count
+    FROM "{ATHENA_DATABASE}"."{ATHENA_TABLE}"
+    """
+    
+    df = execute_athena_query(query)
+    
+    if df.empty:
+        raise HTTPException(status_code=404, detail="No se encontraron datos en AWS")
+    
+    stats = df.iloc[0].to_dict()
+    return {
+        "avg_heart_rate": float(stats['avg_heart_rate']) if stats['avg_heart_rate'] else 0,
+        "avg_oxygen": float(stats['avg_oxygen']) if stats['avg_oxygen'] else 0,
+        "total_records": int(stats['total_records']),
+        "high_heart_rate_count": int(stats['high_heart_rate_count']),
+        "low_heart_rate_count": int(stats['low_heart_rate_count']),
+        "low_oxygen_count": int(stats['low_oxygen_count'])
+    }
+
+@app.get("/aws/high-risk")
+def get_aws_high_risk_records(limit: int = Query(default=50, le=500)):
+    """Obtener registros de alto riesgo desde AWS"""
+    if not AWS_ENABLED:
+        raise HTTPException(status_code=503, detail="AWS Athena no está configurado")
+    
+    query = f"""
+    SELECT 
+        timestamp_parsed as timestamp,
+        heart_rate_avg,
+        oxygen_saturation_avg,
+        heart_rate_category,
+        oxygen_category,
+        date,
+        hour
+    FROM "{ATHENA_DATABASE}"."{ATHENA_TABLE}"
+    WHERE heart_rate_category IN ('Low', 'High') 
+       OR oxygen_category IN ('Concerning', 'Critical')
+    ORDER BY timestamp_parsed DESC
+    LIMIT {limit}
+    """
+    
+    df = execute_athena_query(query)
+    
+    if df.empty:
+        return []
+    
+    return df.to_dict('records')
+
+@app.get("/aws/date-range")
+def get_aws_records_by_date(
+    start_date: Optional[str] = Query(None, description="YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="YYYY-MM-DD"),
+    heart_rate_category: Optional[str] = Query(None),
+    oxygen_category: Optional[str] = Query(None),
+    limit: int = Query(default=100, le=1000)
+):
+    """Filtrar registros de AWS por fecha y categorías"""
+    if not AWS_ENABLED:
+        raise HTTPException(status_code=503, detail="AWS Athena no está configurado")
+    
+    where_clauses = []
+    
+    if start_date:
+        where_clauses.append(f"date >= DATE '{start_date}'")
+    if end_date:
+        where_clauses.append(f"date <= DATE '{end_date}'")
+    if heart_rate_category:
+        where_clauses.append(f"heart_rate_category = '{heart_rate_category}'")
+    if oxygen_category:
+        where_clauses.append(f"oxygen_category = '{oxygen_category}'")
+    
+    where_clause = " AND ".join(where_clauses) if where_clauses else "1=1"
+    
+    query = f"""
+    SELECT 
+        timestamp_parsed as timestamp,
+        heart_rate_avg,
+        oxygen_saturation_avg,
+        heart_rate_category,
+        oxygen_category,
+        date,
+        hour
+    FROM "{ATHENA_DATABASE}"."{ATHENA_TABLE}"
+    WHERE {where_clause}
+    ORDER BY timestamp_parsed DESC
+    LIMIT {limit}
+    """
+    
+    df = execute_athena_query(query)
+    
+    if df.empty:
+        return []
+    
+    return df.to_dict('records')
+
+@app.get("/aws/daily-summary")
+def get_aws_daily_summary(target_date: str = Query(..., description="YYYY-MM-DD")):
+    """Resumen por hora de un día específico desde AWS"""
+    if not AWS_ENABLED:
+        raise HTTPException(status_code=503, detail="AWS Athena no está configurado")
+    
+    query = f"""
+    SELECT 
+        hour,
+        AVG(CAST(heart_rate_avg AS DOUBLE)) as avg_heart_rate,
+        AVG(CAST(oxygen_saturation_avg AS DOUBLE)) as avg_oxygen,
+        COUNT(*) as record_count,
+        MIN(CAST(heart_rate_avg AS DOUBLE)) as min_heart_rate,
+        MAX(CAST(heart_rate_avg AS DOUBLE)) as max_heart_rate,
+        MIN(CAST(oxygen_saturation_avg AS DOUBLE)) as min_oxygen,
+        MAX(CAST(oxygen_saturation_avg AS DOUBLE)) as max_oxygen
+    FROM "{ATHENA_DATABASE}"."{ATHENA_TABLE}"
+    WHERE date = DATE '{target_date}'
+    GROUP BY hour
+    ORDER BY hour
+    """
+    
+    df = execute_athena_query(query)
+    
+    if df.empty:
+        raise HTTPException(status_code=404, detail=f"No hay datos para {target_date}")
+    
+    return {
+        "date": target_date,
+        "hourly_data": df.to_dict('records')
+    }
+
+@app.get("/aws/records/latest")
+def get_aws_latest_records(limit: int = Query(default=50, le=500)):
+    """Obtener los registros más recientes"""
+    if not AWS_ENABLED:
+        raise HTTPException(status_code=503, detail="AWS Athena no está configurado")
+    
+    query = f"""
+    SELECT 
+        timestamp_parsed as timestamp,
+        heart_rate_avg,
+        oxygen_saturation_avg,
+        heart_rate_category,
+        oxygen_category,
+        date,
+        hour
+    FROM "{ATHENA_DATABASE}"."{ATHENA_TABLE}"
+    ORDER BY timestamp_parsed DESC
+    LIMIT {limit}
+    """
+    
+    df = execute_athena_query(query)
+    
+    if df.empty:
+        return []
+    
+    return df.to_dict('records')
+
+@app.get("/aws/records/by-category")
+def get_aws_records_by_category(
+    heart_rate_category: Optional[str] = Query(None, description="Low, Normal, High"),
+    oxygen_category: Optional[str] = Query(None, description="Normal, Concerning, Critical"),
+    limit: int = Query(default=100, le=1000)
+):
+    """Obtener registros filtrados por categorías de salud"""
+    if not AWS_ENABLED:
+        raise HTTPException(status_code=503, detail="AWS Athena no está configurado")
+    
+    where_clauses = []
+    
+    if heart_rate_category:
+        where_clauses.append(f"heart_rate_category = '{heart_rate_category}'")
+    if oxygen_category:
+        where_clauses.append(f"oxygen_category = '{oxygen_category}'")
+    
+    where_clause = " AND ".join(where_clauses) if where_clauses else "1=1"
+    
+    query = f"""
+    SELECT 
+        timestamp_parsed as timestamp,
+        heart_rate_avg,
+        oxygen_saturation_avg,
+        heart_rate_category,
+        oxygen_category,
+        date,
+        hour
+    FROM "{ATHENA_DATABASE}"."{ATHENA_TABLE}"
+    WHERE {where_clause}
+    ORDER BY timestamp_parsed DESC
+    LIMIT {limit}
+    """
+    
+    df = execute_athena_query(query)
+    
+    if df.empty:
+        return []
+    
+    return df.to_dict('records')
+
+@app.get("/aws/records/hourly-stats")
+def get_aws_hourly_stats(
+    date_filter: Optional[str] = Query(None, description="YYYY-MM-DD"),
+    limit_hours: int = Query(default=24, le=168)
+):
+    """Obtener estadísticas agrupadas por hora"""
+    if not AWS_ENABLED:
+        raise HTTPException(status_code=503, detail="AWS Athena no está configurado")
+    
+    where_clause = f"date = DATE '{date_filter}'" if date_filter else "1=1"
+    
+    query = f"""
+    SELECT 
+        date,
+        hour,
+        AVG(CAST(heart_rate_avg AS DOUBLE)) as avg_heart_rate,
+        AVG(CAST(oxygen_saturation_avg AS DOUBLE)) as avg_oxygen,
+        MIN(CAST(heart_rate_avg AS DOUBLE)) as min_heart_rate,
+        MAX(CAST(heart_rate_avg AS DOUBLE)) as max_heart_rate,
+        MIN(CAST(oxygen_saturation_avg AS DOUBLE)) as min_oxygen,
+        MAX(CAST(oxygen_saturation_avg AS DOUBLE)) as max_oxygen,
+        COUNT(*) as record_count
+    FROM "{ATHENA_DATABASE}"."{ATHENA_TABLE}"
+    WHERE {where_clause}
+    GROUP BY date, hour
+    ORDER BY date DESC, hour DESC
+    LIMIT {limit_hours}
+    """
+    
+    df = execute_athena_query(query)
+    
+    if df.empty:
+        return []
+    
+    return df.to_dict('records')
+
+@app.get("/aws/records/recent-hours")
+def get_aws_recent_hours(hours: int = Query(default=24, le=168, description="Últimas X horas")):
+    """Obtener todos los registros de las últimas X horas"""
+    if not AWS_ENABLED:
+        raise HTTPException(status_code=503, detail="AWS Athena no está configurado")
+    
+    # Calcular fecha/hora límite
+    cutoff_time = (datetime.utcnow() - timedelta(hours=hours)).strftime('%Y-%m-%d %H:%M:%S')
+    
+    query = f"""
+    SELECT 
+        timestamp_parsed as timestamp,
+        heart_rate_avg,
+        oxygen_saturation_avg,
+        heart_rate_category,
+        oxygen_category,
+        date,
+        hour
+    FROM "{ATHENA_DATABASE}"."{ATHENA_TABLE}"
+    WHERE timestamp_parsed >= TIMESTAMP '{cutoff_time}'
+    ORDER BY timestamp_parsed DESC
+    """
+    
+    df = execute_athena_query(query)
+    
+    if df.empty:
+        return []
+    
+    return df.to_dict('records')
+
+@app.get("/aws/analytics/trends")
+def get_aws_trends(days: int = Query(default=7, le=30, description="Días para análisis")):
+    """Obtener tendencias de los últimos días"""
+    if not AWS_ENABLED:
+        raise HTTPException(status_code=503, detail="AWS Athena no está configurado")
+    
+    query = f"""
+    SELECT 
+        date,
+        AVG(CAST(heart_rate_avg AS DOUBLE)) as avg_heart_rate,
+        AVG(CAST(oxygen_saturation_avg AS DOUBLE)) as avg_oxygen,
+        MIN(CAST(heart_rate_avg AS DOUBLE)) as min_heart_rate,
+        MAX(CAST(heart_rate_avg AS DOUBLE)) as max_heart_rate,
+        MIN(CAST(oxygen_saturation_avg AS DOUBLE)) as min_oxygen,
+        MAX(CAST(oxygen_saturation_avg AS DOUBLE)) as max_oxygen,
+        COUNT(*) as total_readings,
+        SUM(CASE WHEN heart_rate_category = 'High' THEN 1 ELSE 0 END) as high_hr_count,
+        SUM(CASE WHEN heart_rate_category = 'Low' THEN 1 ELSE 0 END) as low_hr_count,
+        SUM(CASE WHEN oxygen_category = 'Critical' THEN 1 ELSE 0 END) as critical_o2_count,
+        SUM(CASE WHEN oxygen_category = 'Concerning' THEN 1 ELSE 0 END) as concerning_o2_count
+    FROM "{ATHENA_DATABASE}"."{ATHENA_TABLE}"
+    WHERE date >= DATE(current_date - INTERVAL '{days}' DAY)
+    GROUP BY date
+    ORDER BY date DESC
+    """
+    
+    df = execute_athena_query(query)
+    
+    if df.empty:
+        return []
+    
+    return {
+        "period_days": days,
+        "daily_trends": df.to_dict('records')
+    }
+
+@app.get("/aws/analytics/overall")
+def get_aws_overall_analytics():
+    """Obtener análisis general de todos los datos disponibles"""
+    if not AWS_ENABLED:
+        raise HTTPException(status_code=503, detail="AWS Athena no está configurado")
+    
+    query = f"""
+    SELECT 
+        COUNT(*) as total_records,
+        AVG(CAST(heart_rate_avg AS DOUBLE)) as overall_avg_hr,
+        AVG(CAST(oxygen_saturation_avg AS DOUBLE)) as overall_avg_o2,
+        MIN(CAST(heart_rate_avg AS DOUBLE)) as min_hr_ever,
+        MAX(CAST(heart_rate_avg AS DOUBLE)) as max_hr_ever,
+        MIN(CAST(oxygen_saturation_avg AS DOUBLE)) as min_o2_ever,
+        MAX(CAST(oxygen_saturation_avg AS DOUBLE)) as max_o2_ever,
+        MIN(date) as first_record_date,
+        MAX(date) as last_record_date,
+        COUNT(DISTINCT date) as days_with_data,
+        SUM(CASE WHEN heart_rate_category = 'High' THEN 1 ELSE 0 END) as total_high_hr,
+        SUM(CASE WHEN heart_rate_category = 'Low' THEN 1 ELSE 0 END) as total_low_hr,
+        SUM(CASE WHEN heart_rate_category = 'Normal' THEN 1 ELSE 0 END) as total_normal_hr,
+        SUM(CASE WHEN oxygen_category = 'Critical' THEN 1 ELSE 0 END) as total_critical_o2,
+        SUM(CASE WHEN oxygen_category = 'Concerning' THEN 1 ELSE 0 END) as total_concerning_o2,
+        SUM(CASE WHEN oxygen_category = 'Normal' THEN 1 ELSE 0 END) as total_normal_o2
+    FROM "{ATHENA_DATABASE}"."{ATHENA_TABLE}"
+    """
+    
+    df = execute_athena_query(query)
+    
+    if df.empty:
+        raise HTTPException(status_code=404, detail="No hay datos disponibles")
+    
+    result = df.iloc[0].to_dict()
+    
+    # Calcular porcentajes
+    total = float(result['total_records']) if result['total_records'] else 0
+    if total > 0:
+        result['pct_high_hr'] = round((float(result['total_high_hr'] or 0) / total) * 100, 2)
+        result['pct_low_hr'] = round((float(result['total_low_hr'] or 0) / total) * 100, 2)
+        result['pct_normal_hr'] = round((float(result['total_normal_hr'] or 0) / total) * 100, 2)
+        result['pct_critical_o2'] = round((float(result['total_critical_o2'] or 0) / total) * 100, 2)
+        result['pct_concerning_o2'] = round((float(result['total_concerning_o2'] or 0) / total) * 100, 2)
+        result['pct_normal_o2'] = round((float(result['total_normal_o2'] or 0) / total) * 100, 2)
+    
+    return result
 
 if __name__ == "__main__":
     import uvicorn
