@@ -1,5 +1,5 @@
 // src/services/api.js
-const API_BASE = "http://localhost:8000"; // Asegúrate de que FastAPI corra aquí
+const API_BASE = "http://localhost:8000";
 
 // ---- Jugadores ----
 export async function getPlayers() {
@@ -62,7 +62,9 @@ export async function getPlayerSummary(playerId) {
 
 // ---- Equipos ----
 export async function getTeamStats(teamName) {
-  const res = await fetch(`${API_BASE}/teams/${teamName}/stats`);
+  // Codificar el nombre del equipo por si tiene espacios o caracteres especiales
+  const encodedTeamName = encodeURIComponent(teamName);
+  const res = await fetch(`${API_BASE}/teams/${encodedTeamName}/stats`);
   if (!res.ok) throw new Error("Error al obtener estadísticas del equipo");
   return await res.json();
 }
@@ -79,4 +81,25 @@ export async function healthCheck() {
   const res = await fetch(`${API_BASE}/health`);
   if (!res.ok) throw new Error("Error al hacer health check");
   return await res.json();
+}
+
+// ---- Utilidades adicionales ----
+// Función helper para manejar errores de forma consistente
+export async function handleResponse(response) {
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.detail || `Error: ${response.status}`);
+  }
+  return await response.json();
+}
+
+// Versión mejorada con mejor manejo de errores (opcional)
+export async function safeGetPlayers() {
+  try {
+    const res = await fetch(`${API_BASE}/players`);
+    return await handleResponse(res);
+  } catch (error) {
+    console.error("Error en getPlayers:", error);
+    throw error;
+  }
 }
