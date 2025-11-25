@@ -177,3 +177,277 @@
     height: 48px;
   }
 }
+
+/* Agregar estos estilos al final de frontend/frontend/src/styles/dashboard.css */
+
+/* Contenedor de refresh */
+.refresh-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-xl);
+  flex-wrap: wrap;
+}
+
+.refresh-button {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md) var(--spacing-xl);
+  background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+  color: white;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  transition: all var(--transition-fast);
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+}
+
+.refresh-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+.refresh-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.aws-badge {
+  padding: var(--spacing-sm) var(--spacing-md);
+  background-color: var(--color-success);
+  color: var(--color-bg-primary);
+  border-radius: var(--radius-full);
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.dashboard-last-update {
+  margin: var(--spacing-sm) 0 0 0;
+  font-size: 0.85rem;
+  opacity: 0.8;
+  font-weight: 400;
+}
+
+/* Estados de carga y error */
+.loading-state, .error-state {
+  text-align: center;
+  padding: 80px var(--spacing-xl);
+  animation: fadeIn var(--transition-normal);
+}
+
+.loading-state h2, .error-state h2 {
+  font-size: 1.8rem;
+  margin-bottom: var(--spacing-md);
+}
+
+.loading-state p, .error-state p {
+  font-size: 1rem;
+  color: var(--color-text-secondary);
+  margin-bottom: var(--spacing-xl);
+}
+
+.loading-icon {
+  color: var(--color-primary);
+  margin-bottom: var(--spacing-xl);
+}
+
+.error-state h2 {
+  color: var(--color-danger);
+}
+
+.retry-button {
+  padding: var(--spacing-md) var(--spacing-2xl);
+  background-color: var(--color-primary);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-size: 1rem;
+  margin-top: var(--spacing-lg);
+}
+
+.retry-button:hover {
+  background-color: #9333ea;
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+/* Media queries adicionales */
+@media (max-width: 768px) {
+  .refresh-container {
+    flex-direction: column;
+    gap: var(--spacing-md);
+  }
+
+  .refresh-button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .loading-state, .error-state {
+    padding: 60px var(--spacing-lg);
+  }
+
+  .loading-state h2, .error-state h2 {
+    font-size: 1.4rem;
+  }
+}
+/* Agregar estos estilos al final de frontend/frontend/src/styles/dashboard.css */
+
+/* Contenedor de refresh */
+.refresh-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-xl);
+  flex-wrap: wrap;
+}
+
+.refresh-button {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md) var(--spacing-xl);
+  background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+  color: white;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  transition: all var(--transition-fast);
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+}
+
+.refresh-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+.refresh-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.aws-badge {
+  padding: var(--spacing-sm) var(--spacing-md);
+  background-color: var(--color-success);
+  color: var(--color-bg-primary);
+  border-radius: var(--radius-full);
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.data-info {
+  padding: var(--spacing-sm) var(--spacing-md);
+  background-color: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.date-range-info {
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+}
+
+.dashboard-last-update {
+  margin: var(--spacing-sm) 0 0 0;
+  font-size: 0.85rem;
+  opacity: 0.8;
+  font-weight: 400;
+}
+
+/* Estados de carga y error */
+.loading-state, .error-state {
+  text-align: center;
+  padding: 80px var(--spacing-xl);
+  animation: fadeIn var(--transition-normal);
+}
+
+.loading-state h2, .error-state h2 {
+  font-size: 1.8rem;
+  margin-bottom: var(--spacing-md);
+}
+
+.loading-state p, .error-state p {
+  font-size: 1rem;
+  color: var(--color-text-secondary);
+  margin-bottom: var(--spacing-xl);
+}
+
+.loading-icon {
+  color: var(--color-primary);
+  margin-bottom: var(--spacing-xl);
+}
+
+.error-state h2 {
+  color: var(--color-danger);
+}
+
+.retry-button {
+  padding: var(--spacing-md) var(--spacing-2xl);
+  background-color: var(--color-primary);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-size: 1rem;
+  margin-top: var(--spacing-lg);
+}
+
+.retry-button:hover {
+  background-color: #9333ea;
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+/* Media queries adicionales */
+@media (max-width: 768px) {
+  .refresh-container {
+    flex-direction: column;
+    gap: var(--spacing-md);
+  }
+
+  .refresh-button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .loading-state, .error-state {
+    padding: 60px var(--spacing-lg);
+  }
+
+  .loading-state h2, .error-state h2 {
+    font-size: 1.4rem;
+  }
+}
