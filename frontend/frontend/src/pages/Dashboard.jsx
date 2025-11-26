@@ -8,6 +8,7 @@ import MetricsCard from '../components/MetricsCard';
 import ChartHeartRate from '../components/ChartHeartRate';
 import ChartOxygen from '../components/ChartOxygen';
 import ForecastCard from '../components/ForecastCard';
+import GeneratePDF from '../components/GeneratePDF';
 
 // API y adaptadores
 import { 
@@ -23,102 +24,6 @@ import {
 
 // Estilos
 import '../styles/dashboard.css';
-
-// Agregar estos estilos adicionales en dashboard.css:
-/*
-.refresh-container {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: var(--spacing-lg);
-  margin-bottom: var(--spacing-xl);
-}
-
-.refresh-button {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-md) var(--spacing-xl);
-  background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
-  color: white;
-  border-radius: var(--radius-sm);
-  font-weight: 600;
-  transition: all var(--transition-fast);
-  border: none;
-  cursor: pointer;
-}
-
-.refresh-button:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-lg);
-}
-
-.refresh-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.spinning {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-.aws-badge {
-  padding: var(--spacing-sm) var(--spacing-md);
-  background-color: var(--color-success);
-  color: var(--color-bg-primary);
-  border-radius: var(--radius-full);
-  font-size: 0.85rem;
-  font-weight: 600;
-}
-
-.dashboard-last-update {
-  margin: var(--spacing-sm) 0 0 0;
-  font-size: 0.85rem;
-  opacity: 0.8;
-}
-
-.loading-state, .error-state {
-  text-align: center;
-  padding: 80px var(--spacing-xl);
-  animation: fadeIn var(--transition-normal);
-}
-
-.loading-icon {
-  color: var(--color-primary);
-  margin-bottom: var(--spacing-xl);
-}
-
-.error-state h2 {
-  color: var(--color-danger);
-  margin-bottom: var(--spacing-md);
-}
-
-.error-state p {
-  color: var(--color-text-secondary);
-  margin-bottom: var(--spacing-xl);
-}
-
-.retry-button {
-  padding: var(--spacing-md) var(--spacing-2xl);
-  background-color: var(--color-primary);
-  color: white;
-  border: none;
-  border-radius: var(--radius-sm);
-  font-weight: 600;
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
-.retry-button:hover {
-  background-color: #9333ea;
-  transform: translateY(-2px);
-}
-*/
 
 const Dashboard = () => {
   const [analytics, setAnalytics] = useState(null);
@@ -218,7 +123,7 @@ const Dashboard = () => {
         )}
       </header>
 
-      {/* Botón de refresh */}
+      {/* Botón de refresh y PDF */}
       <div className="refresh-container">
         <button 
           onClick={handleRefresh} 
@@ -228,6 +133,16 @@ const Dashboard = () => {
           <RefreshCw size={18} className={loading ? 'spinning' : ''} />
           {loading ? 'Cargando...' : 'Actualizar Datos'}
         </button>
+
+        {/* Botón de Descarga PDF */}
+        {analytics && (
+          <GeneratePDF 
+            analytics={analytics}
+            player={virtualPlayer}
+            isDisabled={loading}
+          />
+        )}
+
         {awsEnabled && (
           <span className="aws-badge">✓ AWS Habilitado</span>
         )}
